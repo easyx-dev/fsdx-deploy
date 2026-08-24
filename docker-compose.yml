@@ -1,0 +1,79 @@
+# 生产环境 docker compose 部署
+# 部署目录：/opt/fsdx-web/（由 DEPLOY_DIR 覆盖，见各脚本）
+# 部署命令：TAG=latest ./deploy.sh
+#
+# 服务器目录结构（/opt/fsdx-web/）：
+#   ├── docker-compose.yml
+#   ├── .env                      # 全部配置（含 DB 密码，见 .env.example）
+#   └── volumes/
+#       ├── app/                  # 应用数据（日志、上传文件，宿主属主 1001:1001）
+#       └── db/                   # PostgreSQL 数据持久化
+#
+# .env 必填项（模板默认值见 .env.example）：
+#   POSTGRES_DB / POSTGRES_USER / POSTGRES_PASSWORD
+#   JWT_SECRET（至少 32 位随机字符串）
+
+services:
+  db:
+    image: postgres:18-alpine
+    container_name: fsdx-db
+    restart: unless-stopped
+    ports:
+      - "${DB_PORT:-14010}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./volumes/db:/var/lib/postgresql
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    mem_limit: 512m
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  app:
+    image: ghcr.io/easyx-dev/fsdx:${TAG:-latest}
+    container_name: fsdx-app
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
+    environment:
+      PORT: "3000"
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      STORAGE_DIR: /app/data
+      JWT_SECRET: ${JWT_SECRET}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - ./volumes/app:/app/data
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    mem_limit: 2g
+    mem_reservation: 512m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/health').then(function(r){if(!r.ok)process.exit(1)}).catch(function(){process.exit(1)})\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

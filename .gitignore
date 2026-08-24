@@ -1,0 +1,13 @@
+# 环境变量（含密钥，禁止提交）
+.env
+
+# 运行时数据
+volumes/
+
+# 备份产物
+backup/
+*.dump
+*.tar.gz
+
+# macOS
+.DS_Store
