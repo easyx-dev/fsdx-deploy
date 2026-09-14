@@ -57,6 +57,7 @@ services:
       STORAGE_DIR: /app/data
       JWT_SECRET: ${JWT_SECRET}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      CONFIG_ENCRYPTION_KEY: ${CONFIG_ENCRYPTION_KEY:-}
     volumes:
       - ./volumes/app:/app/data
     ulimits:
